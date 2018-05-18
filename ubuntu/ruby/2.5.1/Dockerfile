@@ -1,3 +1,15 @@
+# Copyright 2017-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Amazon Software License (the "License"). You may not use this file except in compliance with the License.
+# A copy of the License is located at
+#
+#    http://aws.amazon.com/asl/
+#
+# or in the "license" file accompanying this file.
+# This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied.
+# See the License for the specific language governing permissions and limitations under the License.
+#
+
 FROM ubuntu:14.04.5
 
 ENV DOCKER_BUCKET="download.docker.com" \
@@ -81,5 +93,51 @@ RUN set -ex \
 VOLUME /var/lib/docker
 
 COPY dockerd-entrypoint.sh /usr/local/bin/
+
+ENV RUBY_MAJOR="2.5" \
+    RUBY_VERSION="2.5.1" \
+    RUBY_DOWNLOAD_SHA256="dac81822325b79c3ba9532b048c2123357d3310b2b40024202f360251d9829b1" \
+    RUBYGEMS_VERSION="2.7.2" \
+    BUNDLER_VERSION="1.16.1" \
+    GEM_HOME="/usr/local/bundle" \
+    BUNDLE_PATH="$GEM_HOME" \
+    BUNDLE_BIN="$GEM_HOME/bin" \
+    BUNDLE_SILENCE_ROOT_WARNING=1 \
+    BUNDLE_APP_CONFIG="$GEM_HOME"
+
+ENV PATH $BUNDLE_BIN:$PATH
+
+RUN mkdir -p /usr/local/etc \
+	&& { \
+        echo 'install: --no-document'; \
+        echo 'update: --no-document'; \
+    } >> /usr/local/etc/gemrc \
+    && apt-get update && apt-get install -y --no-install-recommends \
+       bison libgdbm-dev ruby \
+    && wget "https://cache.ruby-lang.org/pub/ruby/$RUBY_MAJOR/ruby-$RUBY_VERSION.tar.gz" -O /tmp/ruby.tar.gz \
+    && echo "$RUBY_DOWNLOAD_SHA256 /tmp/ruby.tar.gz" | sha256sum -c - \
+    && mkdir -p /usr/src/ruby \
+    && tar -xzf /tmp/ruby.tar.gz -C /usr/src/ruby --strip-components=1 \
+    && cd /usr/src/ruby \
+	&& { \
+             echo '#define ENABLE_PATH_CHECK 0'; \
+             echo; \
+             cat file.c; \
+	   } > file.c.new \
+    && mv file.c.new file.c \
+    && autoconf \
+    && ./configure --disable-install-doc \
+    && make -j"$(nproc)" \
+    && make install \
+    && apt-get purge -y --auto-remove bison libgdbm-dev ruby \
+    && cd / \
+    && rm -r /usr/src/ruby \
+    && gem update --system "$RUBYGEMS_VERSION" \
+	&& gem install bundler --version "$BUNDLER_VERSION" \
+    && mkdir -p "$GEM_HOME" "$BUNDLE_BIN" \
+    && chmod 777 "$GEM_HOME" "$BUNDLE_BIN" \
+    && rm -fr /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+CMD [ "irb" ]
 
 ENTRYPOINT ["dockerd-entrypoint.sh"]

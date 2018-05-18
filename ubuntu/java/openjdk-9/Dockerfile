@@ -17,12 +17,15 @@ ENV DOCKER_BUCKET="download.docker.com" \
     DOCKER_CHANNEL="stable" \
     DOCKER_SHA256="a9e90a73c3cdfbf238f148e1ec0eaff5eb181f92f35bdd938fd7dab18e1c4647" \
     DIND_COMMIT="3b5fac462d21ca164b3778647420016315289034" \
-    DOCKER_COMPOSE_VERSION="1.16.1"
+    DOCKER_COMPOSE_VERSION="1.16.1" \
+    GITVERSION_VERSION="3.6.5"
 
 # Building git from source code:
 #   Ubuntu's default git package is built with broken gnutls. Rebuild git with openssl.
 ##########################################################################
-RUN apt-get update \
+RUN set -ex \
+    && echo 'Acquire::CompressionTypes::Order:: "gz";' > /etc/apt/apt.conf.d/99use-gzip-compression \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
        wget=1.15-* python=2.7.5-* python2.7-dev=2.7.6-* fakeroot=1.20-* ca-certificates \
        tar=1.27.1-* gzip=1.6-* zip=3.0-* autoconf=2.69-* automake=1:1.14.1-* \
@@ -30,12 +33,13 @@ RUN apt-get update \
        libbz2-dev=1.0.6-* libc6-dev=2.19-* libcurl4-openssl-dev=7.35.0-* libdb-dev=1:5.3.21~* \
        libevent-dev=2.0.21-stable-* libffi-dev=3.1~rc1+r3.0.13-* libgeoip-dev=1.6.0-* libglib2.0-dev=2.40.2-* \
        libjpeg-dev=8c-* libkrb5-dev=1.12+dfsg-* liblzma-dev=5.1.1alpha+20120614-* \
-       libmagickcore-dev=8:6.7.7.10-* libmagickwand-dev=8:6.7.7.10-* libmysqlclient-dev=5.5.59-* \
+       libmagickcore-dev=8:6.7.7.10-* libmagickwand-dev=8:6.7.7.10-* libmysqlclient-dev=5.5.60-* \
        libncurses5-dev=5.9+20140118-* libpng12-dev=1.2.50-* libpq-dev=9.3.22-* libreadline-dev=6.3-* \
        libsqlite3-dev=3.8.2-* libssl-dev=1.0.1f-* libtool=2.4.2-* libwebp-dev=0.4.0-* \
        libxml2-dev=2.9.1+dfsg1-* libxslt1-dev=1.1.28-* libyaml-dev=0.1.4-* make=3.81-* \
        patch=2.7.1-* xz-utils=5.1.1alpha+20120614-* zlib1g-dev=1:1.2.8.dfsg-* unzip=6.0-* curl=7.35.0-* \
        e2fsprogs=1.42.9-* iptables=1.4.21-* xfsprogs=3.1.9ubuntu2 xz-utils=5.1.1alpha+20120614-* \
+       mono-mcs=3.2.8+dfsg-* \
     && apt-get install -y -qq less=458-* groff=1.22.2-* \
     && apt-get -qy build-dep git=1:1.9.1 \
     && apt-get -qy install libcurl4-openssl-dev=7.35.0-* git-man=1:1.9.1-* liberror-perl=0.17-* \
@@ -51,8 +55,16 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# Download and set up GitVersion
+RUN set -ex \
+    && wget "https://github.com/GitTools/GitVersion/releases/download/v${GITVERSION_VERSION}/GitVersion_${GITVERSION_VERSION}.zip" -O /tmp/GitVersion_${GITVERSION_VERSION}.zip \
+    && mkdir -p /usr/local/GitVersion_${GITVERSION_VERSION} \
+    && unzip /tmp/GitVersion_${GITVERSION_VERSION}.zip -d /usr/local/GitVersion_${GITVERSION_VERSION} \
+    && rm /tmp/GitVersion_${GITVERSION_VERSION}.zip \
+    && echo "mono /usr/local/GitVersion_${GITVERSION_VERSION}/GitVersion.exe /output json /showvariable \$1" >> /usr/local/bin/gitversion \
+    && chmod +x /usr/local/bin/gitversion
 # Install Docker
-RUN set -x \
+RUN set -ex \
     && curl -fSL "https://${DOCKER_BUCKET}/linux/static/${DOCKER_CHANNEL}/x86_64/docker-${DOCKER_VERSION}.tgz" -o docker.tgz \
     && echo "${DOCKER_SHA256} *docker.tgz" | sha256sum -c - \
     && tar --extract --file docker.tgz --strip-components 1  --directory /usr/local/bin/ \
@@ -72,7 +84,8 @@ RUN set -x \
 # Install dependencies by all python images equivalent to buildpack-deps:jessie
 # on the public repos.
 
-RUN wget "https://bootstrap.pypa.io/get-pip.py" -O /tmp/get-pip.py \
+RUN set -ex \
+    && wget "https://bootstrap.pypa.io/2.6/get-pip.py" -O /tmp/get-pip.py \
     && python /tmp/get-pip.py \
     && pip install awscli \
     && rm -fr /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -85,31 +98,32 @@ ENV JAVA_VERSION=9 \
     JAVA_HOME="/opt/jvm/openjdk-9" \
     JDK_HOME="/opt/jvm/openjdk-9" \
     JRE_HOME="/opt/jvm/openjdk-9" \
-    ANT_VERSION=1.10.2 \
+    ANT_VERSION=1.10.3 \
     MAVEN_HOME="/opt/maven" \
     MAVEN_VERSION=3.5.2 \
     MAVEN_CONFIG="/root/.m2" \
     GRADLE_VERSION=4.2.1 \
-    SBT_VERSION=1.0.3 \
+    SBT_VERSION=1.0.4 \
     PROPERTIES_COMMON_VERSION=0.92.37.8 \
     PYTHON_TOOL_VERSION="3.3-*" \
     JDK_VERSION=9.0.4 \
     JDK_DOWNLOAD_SHA256="39362fb9bfb341fcc802e55e8ea59f4664ca58fd821ce956d48e1aa4fb3d2dec" \
-    ANT_DOWNLOAD_SHA512="54805d9b263c3df3552fa4f9221483fc58ebebdbbdb2c34c97b8b13f41290cf9c23f54188a231eb6f3ac9588d618fc74ae0bde35ff80404e00479f1b08555417" \
+    ANT_DOWNLOAD_SHA512="73f2193700b1d1e32eedf25fab1009e2a98fb2f6425413f5c9fa1b0f2f9f49f59cb8ed3f04931c808ae022a64ecfa2619e5fb77643fea6dbc29721e489eb3a07" \
     MAVEN_DOWNLOAD_SHA1="190dcebb8a080f983af4420cac4f3ece7a47dd64" \
     GRADLE_DOWNLOAD_SHA256="b551cc04f2ca51c78dd14edb060621f0e5439bdfafa6fd167032a09ac708fbc0"
 
 ENV JDK_DOWNLOAD_TAR="openjdk-${JDK_VERSION}_linux-x64_bin.tar.gz"
 
-RUN apt-get update \
+RUN set -ex \
+    && apt-get update \
     && apt-get install -y software-properties-common=$PROPERTIES_COMMON_VERSION \
-    && apt-get -y install python-setuptools=$PYTHON_TOOL_VERSION \
+    && apt-get install -y python-setuptools=$PYTHON_TOOL_VERSION \
 
     # Install OpenJDK 9
     # Note: Installing ca-certificates-java installs JDK7 because it's a depedency.
     # We will use update-alternatives to make sure JDK9 has higher priority for all
     # the tools
-    && apt-get install -y ca-certificates-java \
+    && apt-get install -y --no-install-recommends ca-certificates-java \
 
     && mkdir -p $JAVA_HOME \
     && curl -LSso /var/tmp/$JDK_DOWNLOAD_TAR https://download.java.net/java/GA/jdk9/$JDK_VERSION/binaries/$JDK_DOWNLOAD_TAR \
@@ -123,7 +137,7 @@ RUN apt-get update \
      && rm $JAVA_HOME/lib/security/cacerts && ln -s /etc/ssl/certs/java/cacerts $JAVA_HOME/lib/security/cacerts \
 
     # Install Ant
-    && curl -LSso /var/tmp/apache-ant-$ANT_VERSION-bin.tar.gz https://www.apache.org/dist/ant/binaries/apache-ant-$ANT_VERSION-bin.tar.gz  \
+    && curl -LSso /var/tmp/apache-ant-$ANT_VERSION-bin.tar.gz https://archive.apache.org/dist/ant/binaries/apache-ant-$ANT_VERSION-bin.tar.gz  \
     && echo "$ANT_DOWNLOAD_SHA512 /var/tmp/apache-ant-$ANT_VERSION-bin.tar.gz" | sha512sum -c - \
     && tar -xzf /var/tmp/apache-ant-$ANT_VERSION-bin.tar.gz -C /opt \
     && update-alternatives --install /usr/bin/ant ant /opt/apache-ant-$ANT_VERSION/bin/ant 10000 \
@@ -143,14 +157,11 @@ RUN apt-get update \
     && update-alternatives --install /usr/local/bin/gradle gradle /opt/gradle-$GRADLE_VERSION/bin/gradle 10000 \
 
     # Install SBT
-    && curl -LSso /var/tmp/sbt-$SBT_VERSION.tgz https://github.com/sbt/sbt/releases/download/v$SBT_VERSION/sbt-$SBT_VERSION.tgz \
-    && curl -LSso /var/tmp/sbt-$SBT_VERSION.tgz.asc https://github.com/sbt/sbt/releases/download/v$SBT_VERSION/sbt-$SBT_VERSION.tgz.asc \
-    && curl -LSso /var/tmp/sbt.key.asc https://bintray.com/user/downloadSubjectPublicKey?username=sbt \
-
-    && gpg --no-default-keyring --keyring /var/tmp/tmp-keyring.gpg --import /var/tmp/sbt.key.asc \
-    && gpg --no-default-keyring --keyring /var/tmp/tmp-keyring.gpg --verify /var/tmp/sbt-$SBT_VERSION.tgz.asc /var/tmp/sbt-$SBT_VERSION.tgz \
-
-    && tar xzvf /var/tmp/sbt-$SBT_VERSION.tgz -C /opt && update-alternatives --install /usr/local/bin/sbt sbt /opt/sbt/bin/sbt 10000 \
+    && echo "deb https://dl.bintray.com/sbt/debian /" | tee -a /etc/apt/sources.list.d/sbt.list \
+    && apt-get install -y --no-install-recommends apt-transport-https \
+    && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends sbt=$SBT_VERSION \
 
     # Cleanup
     && rm -fr /var/lib/apt/lists/* /tmp/* /var/tmp/* \

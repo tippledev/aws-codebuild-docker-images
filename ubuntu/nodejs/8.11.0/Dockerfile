@@ -1,3 +1,15 @@
+# Copyright 2017-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Amazon Software License (the "License"). You may not use this file except in compliance with the License.
+# A copy of the License is located at
+#
+#    http://aws.amazon.com/asl/
+#
+# or in the "license" file accompanying this file.
+# This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied.
+# See the License for the specific language governing permissions and limitations under the License.
+#
+
 FROM ubuntu:14.04.5
 
 ENV DOCKER_BUCKET="download.docker.com" \
@@ -81,5 +93,34 @@ RUN set -ex \
 VOLUME /var/lib/docker
 
 COPY dockerd-entrypoint.sh /usr/local/bin/
+
+ENV NODE_VERSION="8.11.0"
+
+RUN set -ex \
+    && for key in \
+      94AE36675C464D64BAFA68DD7434390BDBE9B9C5 \
+      0034A06D9D9B0064CE8ADF6BF1747F4AD2306D93 \
+      FD3A5288F042B6850C66B31F09FE44734EB7990E \
+      71DCFD284A79C3B38668286BC97EC7A07EDE3FC1 \
+      DD8F2338BAE7501E3DD5AC78C273792F7D83545D \
+      B9AE9905FFD7803F25714661B63B535A4C206CA9 \
+      C4F0DFFF4E8C1A8236409D08E73BC641CC11F4C8 \
+      77984A986EBC2AA786BC0F66B01FBB92821C587A \
+      56730D5401028683275BD23C23EFEFE93C4CFFFE \
+    ; do \
+      gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$key"; \
+    done
+
+RUN set -ex \
+	&& wget "https://nodejs.org/download/release/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.gz" -O node-v$NODE_VERSION-linux-x64.tar.gz \
+	&& wget "https://nodejs.org/download/release/v$NODE_VERSION/SHASUMS256.txt.asc" -O SHASUMS256.txt.asc \
+	&& gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \
+	&& grep " node-v$NODE_VERSION-linux-x64.tar.gz\$" SHASUMS256.txt | sha256sum -c - \
+		&& tar -xzf "node-v$NODE_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1 \
+		&& rm "node-v$NODE_VERSION-linux-x64.tar.gz" SHASUMS256.txt.asc SHASUMS256.txt \
+		&& ln -s /usr/local/bin/node /usr/local/bin/nodejs \
+		&& rm -fr /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+CMD [ "node" ]
 
 ENTRYPOINT ["dockerd-entrypoint.sh"]
